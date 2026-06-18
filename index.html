@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>Budget</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:system-ui,sans-serif;background:#F0F4FF;color:#1A1A2E;min-height:100vh;overflow-x:hidden}
+input,select,textarea{font-family:system-ui,sans-serif;-webkit-appearance:none}
+input[type=date]{color-scheme:light}
+::-webkit-scrollbar{display:none}
+.header{background:linear-gradient(135deg,#2563EB,#7C3AED);padding:20px;color:#fff;position:sticky;top:0;z-index:100}
+.header-title{font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;opacity:0.8;margin-bottom:4px}
+.header-month{font-size:20px;font-weight:300;letter-spacing:-0.02em}
+.content{padding:16px 20px;padding-bottom:80px}
+.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 8px rgba(0,0,0,0.06)}
+.metric-card{background:linear-gradient(135deg,#EFF6FF,#F5F3FF);border-radius:16px;padding:16px;margin-bottom:14px}
+.btn{border:none;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:system-ui}
+.btn-primary{background:linear-gradient(135deg,#2563EB,#7C3AED);color:#fff}
+.btn-secondary{background:#EFF6FF;color:#2563EB}
+.btn-danger{background:#FEE2E2;color:#EF4444}
+.btn-sm{padding:3px 8px;font-size:11px}
+.fab{position:fixed;bottom:90px;right:20px;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#2563EB,#7C3AED);border:none;color:#fff;font-size:24px;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,0.4)}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E2E8F0;display:flex;justify-content:space-around;padding:10px 0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.nav-btn{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:#94A3B8;font-size:11px;font-weight:500;padding:5px}
+.nav-btn.active{color:#2563EB}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:flex-end}
+.modal{background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;max-height:85vh;overflow-y:auto}
+.modal input,.modal select{width:100%;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:10px 12px;color:#1A1A2E;font-size:14px;margin-bottom:10px;outline:none;font-family:system-ui}
+.expense-item{display:flex;gap:10px;margin-bottom:10px}
+.expense-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.expense-info{flex:1;font-size:13px}
+.expense-title{font-weight:600}
+.expense-date{font-size:11px;color:#94A3B8;margin-top:4px}
+.expense-amount{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.amount{font-size:15px;font-weight:600;color:#EF4444}
+.button-group{display:flex;gap:4px}
+</style>
+</head>
+<body>
+<div class="header">
+<div class="header-title">Budget</div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+<button onclick="prevMonth()" style="background:rgba(255,255,255,0.2);border:none;border-radius:8px;color:#fff;width:32px;height:32px;cursor:pointer;font-size:16px">‹</button>
+<div class="header-month" id="monthLabel">June 2026</div>
+<button onclick="nextMonth()" style="background:rgba(255,255,255,0.2);border:none;border-radius:8px;color:#fff;width:32px;height:32px;cursor:pointer;font-size:16px">›</button>
+</div>
+</div>
+
+<div class="content" id="content"></div>
+
+<div class="nav">
+<button class="nav-btn active" onclick="setView('dashboard')">Home</button>
+<button class="nav-btn" onclick="setView('expenses')">Expenses</button>
+<button class="nav-btn" onclick="setView('cards')">Cards</button>
+</div>
+
+<div id="expenseModal"></div>
+
+<script>
+const SK="romit_budget_v1";
+let data={cards:[],expenses:[],budgets:{},monthlyIncome:{}};
+let currentMonth="2026-06";
+let currentView="dashboard";
+
+const fmt=(n)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n);
+const mLbl=(ym)=>{const[y,m]=ym.split("-");return new Date(y,m-1).toLocaleDateString("en-IN",{month:"long",year:"numeric"})};
+
+function load(){
+  try{const r=localStorage.getItem(SK);if(r)data=JSON.parse(r)}catch{}
+}
+
+function save(){
+  try{localStorage.setItem(SK,JSON.stringify(data))}catch{}
+}
+
+function render(){
+  document.getElementById("monthLabel").innerText=mLbl(currentMonth);
+  const content=document.getElementById("content");
+  content.innerHTML="";
+  
+  if(currentView==="dashboard")renderDashboard(content);
+  else if(currentView==="expenses")renderExpenses(content);
+  else if(currentView==="cards")renderCards(content);
+  
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".nav-btn")[currentView==="dashboard"?0:currentView==="expenses"?1:2].classList.add("active");
+}
+
+function renderDashboard(container){
+  const mExps=data.expenses.filter(e=>e.month===currentMonth);
+  const spent=mExps.reduce((s,e)=>s+Number(e.amount),0);
+  const income=data.monthlyIncome[currentMonth]||0;
+  const savings=income-spent;
+  
+  let html=`<div class="metric-card"><div style="font-size:11px;color:#6366F1;font-weight:600;text-transform:uppercase;margin-bottom:6px">Monthly Income</div><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:22px;font-weight:600;color:#1E1B4B">${income>0?fmt(income):"Not set"}</div><button class="btn btn-primary" onclick="setIncome()">Edit</button></div></div>`;
+  
+  html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px"><div class="card" style="background:linear-gradient(135deg,#EF4444,#F97316);color:#fff;padding:16px"><div style="font-size:10px;font-weight:600;text-transform:uppercase;opacity:0.9">Spent</div><div style="font-size:22px;font-weight:600;margin-top:6px">${fmt(spent)}</div></div><div class="card" style="background:${savings>=0?"linear-gradient(135deg,#10B981,#059669)":"linear-gradient(135deg,#EF4444,#DC2626)"};color:#fff;padding:16px"><div style="font-size:10px;font-weight:600;text-transform:uppercase;opacity:0.9">Savings</div><div style="font-size:22px;font-weight:600;margin-top:6px">${fmt(Math.abs(savings))}</div></div></div>`;
+  
+  container.innerHTML=html;
+}
+
+function renderExpenses(container){
+  const mExps=data.expenses.filter(e=>e.month===currentMonth);
+  let html=`<div style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;margin-bottom:12px">Expenses</div>`;
+  
+  if(mExps.length===0){
+    html+=`<div style="text-align:center;color:#94A3B8;padding:40px 0">No expenses this month</div>`;
+  }else{
+    mExps.forEach(e=>{
+      html+=`<div class="card"><div class="expense-item"><div class="expense-dot" style="background:#2563EB"></div><div class="expense-info"><div class="expense-title">${e.title}</div><div class="expense-date">${new Date(e.date).toLocaleDateString("en-IN")}</div></div><div class="expense-amount"><div class="amount">${fmt(e.amount)}</div><div class="button-group"><button class="btn btn-secondary btn-sm" onclick="editExpense('${e.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">Delete</button></div></div></div></div>`;
+    });
+  }
+  
+  container.innerHTML=html;
+}
+
+function renderCards(container){
+  let html=`<div style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;margin-bottom:12px">My Cards</div>`;
+  data.cards.forEach(c=>{
+    html+=`<div class="card" style="display:flex;justify-content:space-between"><div><div style="font-size:14px;font-weight:600">${c.name}</div><div style="font-size:11px;color:#94A3B8;margin-top:2px">${c.bank}</div></div><button class="btn btn-danger" onclick="deleteCard('${c.id}')">Remove</button></div>`;
+  });
+  container.innerHTML=html;
+}
+
+function setView(v){currentView=v;render()}
+function prevMonth(){const[y,m]=currentMonth.split("-").map(Number);const d=new Date(y,m-2);currentMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;render()}
+function nextMonth(){const[y,m]=currentMonth.split("-").map(Number);const d=new Date(y,m);currentMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;render()}
+
+function setIncome(){const v=prompt("Income:",data.monthlyIncome[currentMonth]||"");if(v){data.monthlyIncome[currentMonth]=Number(v);save();render()}}
+function deleteExpense(id){data.expenses=data.expenses.filter(e=>e.id!==id);save();render()}
+function editExpense(id){const e=data.expenses.find(x=>x.id===id);showExpenseModal(e)}
+function deleteCard(id){data.cards=data.cards.filter(c=>c.id!==id);save();render()}
+
+function showExpenseModal(existing){
+  const modal=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div style="font-size:16px;font-weight:600;margin-bottom:16px">${existing?"Edit":"Add"} expense</div><input id="expTitle" placeholder="Title" value="${existing?.title||""}"/><input id="expAmount" placeholder="Amount" type="number" value="${existing?.amount||""}"/><input id="expDate" type="date" value="${existing?.date||new Date().toISOString().split("T")[0]}"/><button class="btn btn-primary" style="width:100%;margin-top:6px" onclick="saveExpense('${existing?.id||""}')">Save</button><button class="btn" style="width:100%;background:#F8FAFC;color:#64748B;margin-top:8px" onclick="closeModal()">Cancel</button></div></div>`;
+  document.getElementById("expenseModal").innerHTML=modal;
+}
+
+function saveExpense(id){
+  const title=document.getElementById("expTitle").value.trim();
+  const amount=Number(document.getElementById("expAmount").value);
+  const date=document.getElementById("expDate").value;
+  if(!title||!amount)return;
+  const month=date.slice(0,7);
+  if(id){
+    const idx=data.expenses.findIndex(e=>e.id===id);
+    if(idx>=0)data.expenses[idx]={id,title,amount,date,month};
+  }else{
+    data.expenses.push({id:Date.now().toString(),title,amount,date,month});
+  }
+  save();render();closeModal();
+}
+
+function closeModal(){document.getElementById("expenseModal").innerHTML=""}
+
+window.addEventListener('load',()=>{
+  currentMonth=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
+  load();
+  render();
+});
+</script>
+</body>
+</html>
