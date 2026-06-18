@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Budget</title>
+<style>
+body { font-family: system-ui, sans-serif; background: #F0F4FF; margin: 0; padding: 20px; }
+</style>
+</head>
+<body>
+<h1>Budget App</h1>
+<p>Loading...</p>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const App = () => <div><h2>Budget Tracker</h2><p>App loaded successfully</p></div>;
+setTimeout(() => {
+  ReactDOM.createRoot(document.body).render(<App/>);
+}, 100);
+</script>
+</body>
+</html>
