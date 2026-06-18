@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Budget"/>
+<title>Budget</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Sora',system-ui,sans-serif;background:#F0F4FF;color:#1A1A2E;min-height:100vh;overflow-x:hidden}
+input,select,textarea{font-family:'Sora',system-ui,sans-serif;-webkit-appearance:none}
+input[type=date]{color-scheme:light}
+::-webkit-scrollbar{display:none}
+</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const{useState,useEffect}=React;
+const SK="romit_budget_v1";
+const CATS=["Food & Dining","Travel & Transport","Shopping","Entertainment","Health & Wellness","Home & Utilities","Subscriptions","Investments","Business Expenses","Charitable Donations","Bandit Expenses","Annual Overheads","Miscellaneous"];
+const ICONS={"Food & Dining":"🍽","Travel & Transport":"🚗","Shopping":"🛍","Entertainment":"🎬","Health & Wellness":"💊","Home & Utilities":"🏠","Subscriptions":"📱","Investments":"📈","Business Expenses":"💼","Charitable Donations":"🤲","Bandit Expenses":"🐾","Annual Overheads":"📅","Miscellaneous":"📦"};
+const CLRS={"Food & Dining":"#E05C3A","Travel & Transport":"#2563EB","Shopping":"#7C3AED","Entertainment":"#DB2777","Health & Wellness":"#059669","Home & Utilities":"#D97706","Subscriptions":"#0891B2","Investments":"#16A34A","Business Expenses":"#0F766E","Charitable Donations":"#7C3AED","Bandit Expenses":"#C4782A","Annual Overheads":"#64748B","Miscellaneous":"#94A3B8"};
+const FREQS=["Monthly","Quarterly","Half-yearly","Annually"];
+
+const fmt=(n)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n);
+const mLbl=(ym)=>{const[y,m]=ym.split("-");return new Date(y,m-1).toLocaleDateString("en-IN",{month:"long",year:"numeric"})};
+const nextMStr=(ym)=>{const[y,m]=ym.split("-").map(Number);const d=new Date(y,m);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`};
+const prevMStr=(ym)=>{const[y,m]=ym.split("-").map(Number);const d=new Date(y,m-2);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`};
+function allMonthsBetween(start,end){const months=[];let cur=start;while(cur<=end){months.push(cur);cur=nextMStr(cur);}return months;}
+
+function App(){
+const[data,setData]=useState(()=>{try{const r=localStorage.getItem(SK);return r?JSON.parse(r):{cards:[],expenses:[],budgets:{},overheads:[],monthlyIncome:{}}}catch{return{cards:[],expenses:[],budgets:{},overheads:[],monthlyIncome:{}}}});
+const[view,setView]=useState("dashboard");
+const[am,setAm]=useState(()=>new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0"));
+const[showExp,setShowExp]=useState(false);
+const[editExp,setEditExp]=useState(null);
+const[showCard,setShowCard]=useState(false);
+const[showOh,setShowOh]=useState(false);
+const[showBudget,setShowBudget]=useState(null);
+
+useEffect(()=>{try{localStorage.setItem(SK,JSON.stringify(data))}catch{}},[data]);
+
+const mExps=data.expenses.filter(e=>e.month===am);
+const spent=mExps.reduce((s,e)=>s+Number(e.amount),0);
+const income=data.monthlyIncome[am]||0;
+const savings=income-spent;
+const firstMonth=Object.keys(data.monthlyIncome).sort()[0]||am;
+const allMonths=allMonthsBetween(firstMonth,am);
+const cumSavings=allMonths.reduce((acc,m)=>{const mInc=data.monthlyIncome[m]||0;const mSp=data.expenses.filter(e=>e.month===m).reduce((s,e)=>s+Number(e.amount),0);return acc+(mInc-mSp)},0);
+const budM=data.budgets[am]||{};
+const spByCat=CATS.reduce((acc,c)=>{acc[c]=mExps.filter(e=>e.category===c).reduce((s,e)=>s+Number(e.amount),0);return acc},{});
+const spByCard=data.cards.reduce((acc,c)=>{acc[c.id]=mExps.filter(e=>e.card===c.id).reduce((s,e)=>s+Number(e.amount),0);return acc},{});
+const persSp=mExps.filter(e=>e.type==="personal").reduce((s,e)=>s+Number(e.amount),0);
+const bizSp=mExps.filter(e=>e.type==="business").reduce((s,e)=>s+Number(e.amount),0);
+
+const addExp=(e)=>{const id=Date.now().toString();const month=e.date.slice(0,7);setData(p=>({...p,expenses:[...p.expenses,{id,...e,month}]}))};
+const updateExp=(id,updates)=>setData(p=>({...p,expenses:p.expenses.map(e=>e.id===id?{...e,...updates}:e)}));
+const delExp=(id)=>setData(p=>({...p,expenses:p.expenses.filter(e=>e.id!==id)}));
+const addCard=(c)=>setData(p=>({...p,cards:[...p.cards,{id:Date.now().toString(),...c}]}));
+const delCard=(id)=>setData(p=>({...p,cards:p.cards.filter(c=>c.id!==id)}));
+const addOh=(oh)=>setData(p=>({...p,overheads:[...p.overheads,{id:Date.now().toString(),...oh}]}));
+const delOh=(id)=>setData(p=>({...p,overheads:p.overheads.filter(o=>o.id!==id)}));
+const saveBudget=(cat,amt)=>setData(p=>({...p,budgets:{...p.budgets,[am]:{...(p.budgets[am]||{}),[cat]:Number(amt)}}}));
+const setIncome=(v)=>setData(p=>({...p,monthlyIncome:{...p.monthlyIncome,[am]:Number(v)}}));
+
+return React.createElement("div",{style:{minHeight:"100vh",background:"#F0F4FF",paddingBottom:80}},
+React.createElement("div",{style:{background:"linear-gradient(135deg,#2563EB,#7C3AED)",padding:"20px",paddingTop:"max(20px,env(safe-area-inset-top))",color:"#fff"}},
+React.createElement("div",{style:{fontSize:11,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.7)",textTransform:"uppercase",marginBottom:4}},"Budget"),
+React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between"}},
+React.createElement("button",{onClick:()=>setAm(prevMStr(am)),style:{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,color:"#fff",width:32,height:32,cursor:"pointer",fontSize:16}},"‹"),
+React.createElement("div",{style:{fontSize:20,fontWeight:300,letterSpacing:"-0.02em",color:"#fff"}},mLbl(am)),
+React.createElement("button",{onClick:()=>setAm(nextMStr(am)),style:{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,color:"#fff",width:32,height:32,cursor:"pointer",fontSize:16}},">")
+)
+),
+React.createElement("div",{style:{padding:"16px 20px",paddingBottom:80}},
+view==="dashboard"?React.createElement("div",null,
+React.createElement("div",{style:{background:"linear-gradient(135deg,#EFF6FF,#F5F3FF)",borderRadius:16,padding:16,marginBottom:14}},
+React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,color:"#6366F1",letterSpacing:"0.08em",fontWeight:600,textTransform:"uppercase"}},"Monthly Income"),
+React.createElement("div",{style:{fontSize:22,fontWeight:600,color:"#1E1B4B",marginTop:2}},income>0?fmt(income):"Not set")
+),
+React.createElement("button",{onClick:()=>{const v=prompt("Income:",income||"");if(v)setIncome(v)},style:{background:"#6366F1",border:"none",borderRadius:10,color:"#fff",padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}},"Edit")
+)
+),
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}},
+React.createElement("div",{style:{background:"linear-gradient(135deg,#EF4444,#F97316)",borderRadius:14,padding:16,color:"#fff"}},
+React.createElement("div",{style:{fontSize:10,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",opacity:0.9}},"Spent"),
+React.createElement("div",{style:{fontSize:22,fontWeight:600,marginTop:6}},fmt(spent))
+),
+React.createElement("div",{style:{background:savings>=0?"linear-gradient(135deg,#10B981,#059669)":"linear-gradient(135deg,#EF4444,#DC2626)",borderRadius:14,padding:16,color:"#fff"}},
+React.createElement("div",{style:{fontSize:10,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",opacity:0.9}},"Savings"),
+React.createElement("div",{style:{fontSize:22,fontWeight:600,marginTop:6}},fmt(Math.abs(savings)))
+)
+),
+React.createElement("div",{style:{background:"linear-gradient(135deg,#1E1B4B,#312E81)",borderRadius:14,padding:16,marginBottom:14,color:"#fff"}},
+React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,0.6)",letterSpacing:"0.1em",fontWeight:600,textTransform:"uppercase",marginBottom:6}},"Overall Saved"),
+React.createElement("div",{style:{fontSize:28,fontWeight:300,letterSpacing:"-0.02em"}},fmt(cumSavings)),
+React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}},"across "+allMonths.length+" month"+(allMonths.length!==1?"s":""))
+),
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}},
+React.createElement("div",{style:{background:"linear-gradient(135deg,#EFF6FF,#F5F3FF)",borderRadius:14,padding:16}},
+React.createElement("div",{style:{fontSize:10,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",opacity:0.7}},"Personal"),
+React.createElement("div",{style:{fontSize:18,fontWeight:600,marginTop:4,color:"#1A1A2E"}},fmt(persSp))
+),
+React.createElement("div",{style:{background:"linear-gradient(135deg,#F0FDF4,#ECFDF5)",borderRadius:14,padding:16}},
+React.createElement("div",{style:{fontSize:10,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",opacity:0.7}},"Business"),
+React.createElement("div",{style:{fontSize:18,fontWeight:600,marginTop:4,color:"#1A1A2E"}},fmt(bizSp))
+)
+),
+spByCat["Charitable Donations"]>0?React.createElement("div",{style:{background:"#fff",borderRadius:16,padding:16,marginBottom:14,borderLeft:"4px solid #7C3AED"}},
+React.createElement("div",{style:{fontSize:11,color:"#7C3AED",letterSpacing:"0.08em",marginBottom:2,fontWeight:600}},"CHARITABLE DONATIONS THIS MONTH"),
+React.createElement("div",{style:{fontSize:18,fontWeight:300}},fmt(spByCat["Charitable Donations"]))
+):null,
+React.createElement("div",{style:{background:"#fff",borderRadius:16,padding:16,marginBottom:14,borderLeft:"4px solid #C4782A"}},
+React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,color:"#C4782A",letterSpacing:"0.08em",marginBottom:4,fontWeight:600}},"🐾 BANDIT THIS MONTH"),
+React.createElement("div",{style:{fontSize:22,fontWeight:300}},fmt(spByCat["Bandit Expenses"])),
+budM["Bandit Expenses"]>0?React.createElement("div",{style:{fontSize:11,color:"#3A3A5A",marginTop:3}},"of "+fmt(budM["Bandit Expenses"])+" budget · "+Math.round((spByCat["Bandit Expenses"]/budM["Bandit Expenses"])*100)+"% used"):null
+),
+React.createElement("button",{onClick:()=>setView("expenses"),style:{background:"#C4782A22",border:"1px solid #C4782A44",borderRadius:8,color:"#C4782A",padding:"6px 10px",fontSize:12,cursor:"pointer"}},"View all")
+)
+)
+):
+view==="expenses"?React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#94A3B8",textTransform:"uppercase",marginBottom:12}},"Expenses"),
+mExps.length===0?React.createElement("div",{style:{textAlign:"center",color:"#94A3B8",padding:"40px 0"}},"No expenses this month"):
+mExps.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>React.createElement("div",{key:e.id,style:{background:"#fff",borderRadius:16,padding:14,marginBottom:10}},
+React.createElement("div",{style:{display:"flex",gap:10}},
+React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:CLRS[e.category],marginTop:3}}),
+React.createElement("div",{style:{flex:1}},
+React.createElement("div",{style:{fontSize:13,fontWeight:600}},e.title),
+React.createElement("div",{style:{fontSize:11,color:"#94A3B8",marginTop:4}},new Date(e.date).toLocaleDateString("en-IN"))
+),
+React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}},
+React.createElement("div",{style:{fontSize:15,fontWeight:600,color:"#EF4444"}},fmt(e.amount)),
+React.createElement("div",{style:{display:"flex",gap:4}},
+React.createElement("button",{onClick:()=>setEditExp(e),style:{background:"#EFF6FF",border:"none",borderRadius:6,color:"#2563EB",padding:"3px 8px",fontSize:11,cursor:"pointer"}},"Edit"),
+React.createElement("button",{onClick:()=>delExp(e.id),style:{background:"#FEE2E2",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",fontSize:11,cursor:"pointer"}},"Delete")
+)
+)
+)
+))
+):
+view==="budget"?React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#94A3B8",textTransform:"uppercase",marginBottom:12}},"Budget vs Spend"),
+CATS.map(cat=>{const spent=spByCat[cat];const budget=budM[cat]||0;const pct=budget>0?(spent/budget)*100:0;return React.createElement("div",{key:cat,style:{background:"#fff",borderRadius:16,padding:14,marginBottom:10}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},React.createElement("span",{style:{fontSize:18}},ICONS[cat]),React.createElement("div",null,React.createElement("div",{style:{fontSize:13,fontWeight:600}},cat),React.createElement("div",{style:{fontSize:11,color:"#94A3B8",marginTop:1}},fmt(spent)+(budget>0?" of "+fmt(budget):""))))),React.createElement("button",{onClick:()=>setShowBudget(cat),style:{background:"#EFF6FF",border:"none",borderRadius:8,color:"#2563EB",padding:"5px 10px",fontSize:11,cursor:"pointer"}},"Set")),budget>0?React.createElement("div",{style:{background:"#F1F5F9",borderRadius:3,height:6,overflow:"hidden",marginTop:8}},React.createElement("div",{style:{background:pct>90?"#EF4444":pct>70?"#F59E0B":"#2563EB",height:"100%",width:Math.min(pct,100)+"%"}})):null);})
+):
+view==="reports"?React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#94A3B8",textTransform:"uppercase",marginBottom:12}},"Spend Breakdown"),
+CATS.filter(c=>spByCat[c]>0).map(cat=>React.createElement("div",{key:cat,style:{background:"#fff",borderRadius:16,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("div",{style:{display:"flex",gap:10,alignItems:"center"}},React.createElement("span",{style:{fontSize:18}},ICONS[cat]),React.createElement("div",null,React.createElement("div",{style:{fontSize:13,fontWeight:500}},cat))),React.createElement("div",{style:{fontSize:15,fontWeight:600,color:"#1A1A2E"}},fmt(spByCat[cat])))),
+data.expenses.filter(e=>e.category==="Charitable Donations").length>0?React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#94A3B8",textTransform:"uppercase",marginBottom:12,marginTop:20}},"Charitable Donations (80G)"),
+React.createElement("div",{style:{background:"#fff",borderRadius:16,padding:16,borderLeft:"4px solid #7C3AED"}},
+React.createElement("div",{style:{fontSize:12,color:"#7C3AED",marginBottom:4,fontWeight:600}},"All time total for 80G"),
+React.createElement("div",{style:{fontSize:20,fontWeight:600,color:"#1A1A2E",marginTop:8}},fmt(data.expenses.filter(e=>e.category==="Charitable Donations").reduce((s,e)=>s+Number(e.amount),0)))
+)
+):null
+):
+view==="cards"?React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#94A3B8",textTransform:"uppercase",marginBottom:12}},"My Cards"),
+data.cards.map(c=>React.createElement("div",{key:c.id,style:{background:"#fff",borderRadius:16,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("div",null,React.createElement("div",{style:{fontSize:14,fontWeight:600}},c.name),React.createElement("div",{style:{fontSize:11,color:"#94A3B8",marginTop:2}},c.bank)),React.createElement("button",{onClick:()=>delCard(c.id),style:{background:"#FEE2E2",border:"none",borderRadius:8,color:"#EF4444",padding:"6px 10px",fontSize:12,cursor:"pointer"}},"Remove")))
+):
+view==="overheads"?React.createElement("div",null,
+React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#94A3B8",textTransform:"uppercase",marginBottom:12}},"Fixed Payments"),
+data.overheads.map(oh=>React.createElement("div",{key:oh.id,style:{background:"#fff",borderRadius:16,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between"}},React.createElement("div",null,React.createElement("div",{style:{fontSize:14,fontWeight:600}},oh.title),React.createElement("div",{style:{fontSize:11,color:"#94A3B8",marginTop:2}},oh.frequency+(oh.nextDue?" · Due: "+oh.nextDue:""))),React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}},React.createElement("div",{style:{fontSize:15,fontWeight:600}},fmt(oh.amount)),React.createElement("button",{onClick:()=>delOh(oh.id),style:{background:"#FEE2E2",border:"none",borderRadius:8,color:"#EF4444",padding:"6px 10px",fontSize:12,cursor:"pointer"}},"Delete"))))
+):null
+),
+view==="expenses"?React.createElement("button",{onClick:()=>setShowExp(true),style:{position:"fixed",bottom:90,right:20,width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(37,99,235,0.4)"}},"<+"):
+view==="cards"?React.createElement("button",{onClick:()=>setShowCard(true),style:{position:"fixed",bottom:90,right:20,width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(37,99,235,0.4)"}},"<+"):
+view==="overheads"?React.createElement("button",{onClick:()=>setShowOh(true),style:{position:"fixed",bottom:90,right:20,width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(37,99,235,0.4)"}},"<+"):null,
+React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-around",padding:"10px 0",paddingBottom:"max(10px,env(safe-area-inset-bottom))",zIndex:50}},
+["dashboard","expenses","budget","reports","cards"].map((v,i)=>React.createElement("button",{key:v,onClick:()=>setView(v),style:{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:view===v?"#2563EB":"#94A3B8",fontSize:11,fontWeight:500,padding:"6px 10px"}},["Home","Expenses","Budget","Reports","Cards"][i]))
+),
+(showExp||editExp)&&React.createElement(ExpenseModal,{cards:data.cards,existing:editExp,onClose:()=>{setShowExp(false);setEditExp(null)},onSave:(e)=>{editExp?updateExp(editExp.id,e):addExp(e);setShowExp(false);setEditExp(null)}}),
+showCard&&React.createElement(CardModal,{onClose:()=>setShowCard(false),onSave:addCard}),
+showOh&&React.createElement(OhModal,{onClose:()=>setShowOh(false),onSave:addOh}),
+showBudget&&React.createElement(BudgetModal,{cat:showBudget,cur:budM[showBudget]||"",onClose:()=>setShowBudget(null),onSave:(a)=>{saveBudget(showBudget,a);setShowBudget(null)}})
+);
+}
+
+function ExpenseModal({cards,existing,onClose,onSave}){
+const[title,setTitle]=useState(existing?.title||"");
+const[desc,setDesc]=useState(existing?.description||"");
+const[amt,setAmt]=useState(existing?.amount||"");
+const[cat,setCat]=useState(existing?.category||"Food & Dining");
+const[card,setCard]=useState(existing?.card||cards[0]?.id||"Cash");
+const[type,setType]=useState(existing?.type||"personal");
+const[date,setDate]=useState(existing?.date||new Date().toISOString().split("T")[0]);
+const save=()=>{if(!title.trim()||!amt)return;onSave({title:title.trim(),description:desc,amount:parseFloat(amt),category:cat,card,type,date})};
+return React.createElement("div",{onClick:onClose,style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-end"}},
+React.createElement("div",{onClick:e=>e.stopPropagation(),style:{background:"#fff",borderRadius:"20px 20px 0 0",padding:24,paddingBottom:"max(24px,env(safe-area-inset-bottom))",width:"100%",maxHeight:"85vh",overflowY:"auto"}},
+React.createElement("div",{style:{fontSize:16,fontWeight:600,marginBottom:16}},(existing?"Edit":"Add")+" expense"),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Title",value:title,onChange:e=>setTitle(e.target.value)}),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Description",value:desc,onChange:e=>setDesc(e.target.value)}),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Amount",type:"number",value:amt,onChange:e=>setAmt(e.target.value)}),
+React.createElement("select",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},value:cat,onChange:e=>setCat(e.target.value)},CATS.map(c=>React.createElement("option",{key:c},c))),
+React.createElement("select",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},value:card,onChange:e=>setCard(e.target.value)},cards.map(c=>React.createElement("option",{key:c.id,value:c.id},c.name)),React.createElement("option",{value:"Cash"},"Cash / UPI")),
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}},
+React.createElement("select",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},value:type,onChange:e=>setType(e.target.value)},React.createElement("option",{value:"personal"},"Personal"),React.createElement("option",{value:"business"},"Business")),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},type:"date",value:date,onChange:e=>setDate(e.target.value)})
+),
+React.createElement("button",{onClick:save,style:{width:"100%",padding:13,borderRadius:12,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:6}},existing?"Save changes":"Add expense"),
+React.createElement("button",{onClick:onClose,style:{width:"100%",padding:11,borderRadius:12,background:"transparent",border:"1px solid #E2E8F0",color:"#64748B",fontSize:14,cursor:"pointer",marginTop:8}},existing?"Close":"Cancel")
+)
+);
+}
+
+function CardModal({onClose,onSave}){
+const[name,setName]=useState("");
+const[bank,setBank]=useState("");
+return React.createElement("div",{onClick:onClose,style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-end"}},
+React.createElement("div",{onClick:e=>e.stopPropagation(),style:{background:"#fff",borderRadius:"20px 20px 0 0",padding:24,width:"100%"}},
+React.createElement("div",{style:{fontSize:16,fontWeight:600,marginBottom:16}},"Add card"),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Card name",value:name,onChange:e=>setName(e.target.value)}),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Bank",value:bank,onChange:e=>setBank(e.target.value)}),
+React.createElement("button",{onClick:()=>{if(!name.trim())return;onSave({name:name.trim(),bank});onClose()},style:{width:"100%",padding:13,borderRadius:12,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:6}},"Add"),
+React.createElement("button",{onClick:onClose,style:{width:"100%",padding:11,borderRadius:12,background:"transparent",border:"1px solid #E2E8F0",color:"#64748B",fontSize:14,cursor:"pointer",marginTop:8}},"Cancel")
+)
+);
+}
+
+function OhModal({onClose,onSave}){
+const[title,setTitle]=useState("");
+const[amt,setAmt]=useState("");
+const[freq,setFreq]=useState("Monthly");
+const[due,setDue]=useState("");
+return React.createElement("div",{onClick:onClose,style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-end"}},
+React.createElement("div",{onClick:e=>e.stopPropagation(),style:{background:"#fff",borderRadius:"20px 20px 0 0",padding:24,width:"100%"}},
+React.createElement("div",{style:{fontSize:16,fontWeight:600,marginBottom:16}},"Add fixed payment"),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Title",value:title,onChange:e=>setTitle(e.target.value)}),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Amount",type:"number",value:amt,onChange:e=>setAmt(e.target.value)}),
+React.createElement("select",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},value:freq,onChange:e=>setFreq(e.target.value)},FREQS.map(f=>React.createElement("option",{key:f},f))),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},type:"date",value:due,onChange:e=>setDue(e.target.value)}),
+React.createElement("button",{onClick:()=>{if(!title.trim()||!amt)return;onSave({title:title.trim(),amount:parseFloat(amt),frequency:freq,nextDue:due});onClose()},style:{width:"100%",padding:13,borderRadius:12,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:6}},"Add"),
+React.createElement("button",{onClick:onClose,style:{width:"100%",padding:11,borderRadius:12,background:"transparent",border:"1px solid #E2E8F0",color:"#64748B",fontSize:14,cursor:"pointer",marginTop:8}},"Cancel")
+)
+);
+}
+
+function BudgetModal({cat,cur,onClose,onSave}){
+const[val,setVal]=useState(cur);
+return React.createElement("div",{onClick:onClose,style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-end"}},
+React.createElement("div",{onClick:e=>e.stopPropagation(),style:{background:"#fff",borderRadius:"20px 20px 0 0",padding:24,width:"100%"}},
+React.createElement("div",{style:{fontSize:16,fontWeight:600,marginBottom:16}},"Set budget — "+cat),
+React.createElement("input",{style:{width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 12px",color:"#1A1A2E",fontSize:14,marginBottom:10,outline:"none",fontFamily:"'Sora',system-ui,sans-serif"},placeholder:"Budget",type:"number",value:val,onChange:e=>setVal(e.target.value)}),
+React.createElement("button",{onClick:()=>onSave(val),style:{width:"100%",padding:13,borderRadius:12,background:"linear-gradient(135deg,#2563EB,#7C3AED)",border:"none",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:6}},"Save"),
+React.createElement("button",{onClick:onClose,style:{width:"100%",padding:11,borderRadius:12,background:"transparent",border:"1px solid #E2E8F0",color:"#64748B",fontSize:14,cursor:"pointer",marginTop:8}},"Cancel")
+)
+);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
